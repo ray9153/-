@@ -501,8 +501,17 @@
                 </div>
 
                 <div class="mode-item">
-                    <strong>2. 未选择四级联动时默认随机生成</strong>
-                    <p>如果没有完整选择省市区街道，系统会自动生成完全随机的地址。</p>
+                    <strong>2. 智能地址补全功能</strong>
+                    <p>当您没有完整选择四级地址时，系统会基于您已选择的地址级别智能补全：</p>
+                    <ul>
+                        <li><strong>只选择省份：</strong>系统会在该省份下随机选择市、区、街道</li>
+                        <li><strong>选择省市：</strong>系统会在该市下随机选择区、街道</li>
+                        <li><strong>选择省市区：</strong>系统会在该区下随机选择街道</li>
+                        <li><strong>完全不选择：</strong>系统会生成完全随机的地址</li>
+                    </ul>
+                    <div class="example">
+                        <strong>示例：</strong>选择"浙江省"，系统会自动在浙江省下随机选择杭州市/宁波市等，然后随机选择对应的区县和街道
+                    </div>
                 </div>
 
                 <div class="mode-item">
@@ -539,9 +548,11 @@
                 <h4>💡 使用技巧</h4>
                 <ul>
                     <li><strong>快速随机：</strong>不选择任何地址直接点击生成，获得完全随机地址</li>
+                    <li><strong>智能补全：</strong>只选择省份或省市，系统会智能补全下级地址，确保地理位置合理</li>
                     <li><strong>半自定义：</strong>选择省市区街道，详细地址留空，获得该地区的随机详细地址</li>
                     <li><strong>灵活生成：</strong>使用*号可以固定部分地址，随机生成其他部分</li>
                     <li><strong>批量生成：</strong>多次点击生成按钮可获得不同的随机结果</li>
+                    <li><strong>地理合理性：</strong>系统确保生成的地址在地理上是真实存在的组合</li>
                 </ul>
             </div>
 
@@ -1931,6 +1942,77 @@
             };
         }
 
+        // 智能随机地址生成：基于用户已选择的地址级别进行智能补全
+        function generateSmartRandomAddress(selectedProvince, selectedCity, selectedDistrict, selectedStreet) {
+            let finalProvince, finalCity, finalDistrict, finalStreet;
+
+            // 如果省份未选择，完全随机生成
+            if (!selectedProvince) {
+                return generateRandomAddress();
+            }
+
+            // 省份已选择
+            finalProvince = selectedProvince;
+
+            // 如果市未选择，在该省份下随机选择市
+            if (!selectedCity) {
+                const cities = Object.keys(addressData[finalProvince]);
+                if (cities.length === 0) {
+                    console.warn(`省份 ${finalProvince} 下没有可用的城市数据`);
+                    return generateRandomAddress();
+                }
+                finalCity = cities[Math.floor(Math.random() * cities.length)];
+            } else {
+                finalCity = selectedCity;
+            }
+
+            // 如果区县未选择，在该市下随机选择区县
+            if (!selectedDistrict) {
+                const districts = Object.keys(addressData[finalProvince][finalCity]);
+                if (districts.length === 0) {
+                    console.warn(`城市 ${finalProvince}${finalCity} 下没有可用的区县数据`);
+                    return generateRandomAddress();
+                }
+                finalDistrict = districts[Math.floor(Math.random() * districts.length)];
+            } else {
+                finalDistrict = selectedDistrict;
+            }
+
+            // 如果街道未选择，在该区县下随机选择街道
+            if (!selectedStreet) {
+                const streets = addressData[finalProvince][finalCity][finalDistrict];
+                if (!streets || streets.length === 0) {
+                    console.warn(`区县 ${finalProvince}${finalCity}${finalDistrict} 下没有可用的街道数据`);
+                    return generateRandomAddress();
+                }
+                finalStreet = streets[Math.floor(Math.random() * streets.length)];
+            } else {
+                finalStreet = selectedStreet;
+            }
+
+            // 生成随机详细地址
+            const template = addressTemplates[Math.floor(Math.random() * addressTemplates.length)];
+            const building = Math.floor(Math.random() * 99) + 1; // 1-99号楼
+            const unit = Math.floor(Math.random() * 8) + 1; // 1-8栋
+            const floor = Math.floor(Math.random() * 3) + 1; // 1-3单元
+            const room = Math.floor(Math.random() * 900) + 100; // 100-999室
+
+            const detailAddress = template
+                .replace('{building}', building)
+                .replace('{unit}', unit)
+                .replace('{floor}', floor)
+                .replace('{room}', room);
+
+            return {
+                province: finalProvince,
+                city: finalCity,
+                district: finalDistrict,
+                street: finalStreet,
+                detail: detailAddress,
+                full: finalProvince + finalCity + finalDistrict + finalStreet + detailAddress
+            };
+        }
+
         // 处理自定义地址中的*号随机生成
         function processCustomAddress(address) {
             if (!address || !address.includes('*')) {
@@ -1953,51 +2035,31 @@
             const street = document.getElementById('street').value;
             let detailAddress = document.getElementById('detail-address-input').value.trim();
 
-            // 如果用户没有完整选择地址，使用随机地址
-            if (!province || !city || !district || !street) {
-                const randomAddr = generateRandomAddress();
-                return {
-                    isRandom: true,
-                    province: randomAddr.province,
-                    city: randomAddr.city,
-                    district: randomAddr.district,
-                    street: randomAddr.street,
-                    detail: randomAddr.detail,
-                    full: randomAddr.full
-                };
-            }
+            // 使用智能随机地址生成：基于用户已选择的地址级别进行智能补全
+            const smartAddr = generateSmartRandomAddress(province, city, district, street);
 
-            // 用户选择了完整地址
-            let fullAddress = province + city + district + street;
+            // 判断是否为完全用户选择的地址（四级都已选择）
+            const isFullySelected = province && city && district && street;
+
             let finalDetailAddress = '';
+            let fullAddress = smartAddr.province + smartAddr.city + smartAddr.district + smartAddr.street;
 
             if (detailAddress) {
                 // 处理自定义地址中的*号随机生成
                 finalDetailAddress = processCustomAddress(detailAddress);
                 fullAddress += finalDetailAddress;
             } else {
-                // 如果没有输入详细地址，生成一个随机的详细地址
-                const template = addressTemplates[Math.floor(Math.random() * addressTemplates.length)];
-                const building = Math.floor(Math.random() * 99) + 1;
-                const unit = Math.floor(Math.random() * 8) + 1;
-                const floor = Math.floor(Math.random() * 3) + 1;
-                const room = Math.floor(Math.random() * 900) + 100;
-
-                finalDetailAddress = template
-                    .replace('{building}', building)
-                    .replace('{unit}', unit)
-                    .replace('{floor}', floor)
-                    .replace('{room}', room);
-
-                fullAddress += finalDetailAddress;
+                // 如果没有输入详细地址，使用智能生成的详细地址
+                finalDetailAddress = smartAddr.detail;
+                fullAddress = smartAddr.full;
             }
 
             return {
-                isRandom: false,
-                province: province,
-                city: city,
-                district: district,
-                street: street,
+                isRandom: !isFullySelected, // 如果不是完全用户选择，则标记为随机
+                province: smartAddr.province,
+                city: smartAddr.city,
+                district: smartAddr.district,
+                street: smartAddr.street,
                 detail: finalDetailAddress,
                 full: fullAddress
             };
