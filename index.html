@@ -1938,7 +1938,7 @@
                 district: randomDistrict,
                 street: randomStreet,
                 detail: detailAddress,
-                full: randomProvince + randomCity + randomDistrict + randomStreet + detailAddress
+                full: formatAddress(randomProvince, randomCity, randomDistrict, randomStreet) + detailAddress
             };
         }
 
@@ -2009,8 +2009,25 @@
                 district: finalDistrict,
                 street: finalStreet,
                 detail: detailAddress,
-                full: finalProvince + finalCity + finalDistrict + finalStreet + detailAddress
+                full: formatAddress(finalProvince, finalCity, finalDistrict, finalStreet) + detailAddress
             };
+        }
+
+        // 检测是否为直辖市
+        function isMunicipality(province) {
+            const municipalities = ['北京市', '天津市', '上海市', '重庆市'];
+            return municipalities.includes(province);
+        }
+
+        // 生成正确的地址格式（处理直辖市重复问题）
+        function formatAddress(province, city, district, street) {
+            if (isMunicipality(province)) {
+                // 直辖市：省份名称 + 区县 + 街道（跳过重复的城市名称）
+                return province + district + street;
+            } else {
+                // 普通省份：省份 + 城市 + 区县 + 街道
+                return province + city + district + street;
+            }
         }
 
         // 处理自定义地址中的*号随机生成
@@ -2042,7 +2059,7 @@
             const isFullySelected = province && city && district && street;
 
             let finalDetailAddress = '';
-            let fullAddress = smartAddr.province + smartAddr.city + smartAddr.district + smartAddr.street;
+            let fullAddress = formatAddress(smartAddr.province, smartAddr.city, smartAddr.district, smartAddr.street);
 
             if (detailAddress) {
                 // 处理自定义地址中的*号随机生成
